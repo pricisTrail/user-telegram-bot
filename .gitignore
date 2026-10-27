@@ -14,4 +14,10 @@ list_drives.txt
 cookies.txt
 downloads/*
 *.session
+*.session-*
+.env
+.env.*
+.venv/
+venv/
+.koyeb-ready
 __pycache__/

@@ -6,6 +6,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from logging import getLogger, FileHandler, StreamHandler, INFO, basicConfig, WARNING
+from pathlib import Path
+from deploy.koyeb_environment import READINESS_FILENAME
 from asyncio import sleep
 from sabnzbdapi import SabnzbdClient
 from aioaria2 import Aria2HttpClient
@@ -239,6 +241,17 @@ async def set_aria2(gid, selected_files):
         LOGGER.info(f"Verified! Gid: {gid}")
     else:
         LOGGER.info(f"Verification Failed! Report! Gid: {gid}")
+
+
+@app.get("/healthz")
+async def healthcheck():
+    # The Koyeb bootstrap removes stale readiness before starting the bot.
+    # Its main process writes this only after initialization and handlers finish.
+    ready = Path(READINESS_FILENAME).is_file()
+    return JSONResponse(
+        {"status": "ready" if ready else "starting"},
+        status_code=200 if ready else 503,
+    )
 
 
 @app.get("/", response_class=HTMLResponse)

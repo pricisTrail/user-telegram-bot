@@ -1,6 +1,14 @@
 from . import LOGGER, bot_loop
 from .core.telegram_manager import TgClient
 from .core.config_manager import Config
+from os import environ
+
+KOYEB_MODE = environ.get("MLTB_KOYEB", "").lower() in {"true", "1", "yes", "on"}
+if KOYEB_MODE:
+    from deploy.koyeb_environment import clear_readiness
+
+    # Also cover direct restarts of the bot process.
+    clear_readiness()
 
 Config.load()
 
@@ -18,6 +26,12 @@ async def main():
     )
 
     await load_settings()
+
+    # A saved Mongo configuration must not restore an obsolete Koyeb URL/port.
+    if KOYEB_MODE:
+        from deploy.koyeb_environment import apply_platform_config
+
+        apply_platform_config(Config, environ)
 
     await gather(TgClient.start_bot(), TgClient.start_user())
     await gather(load_configurations(), update_variables())
@@ -63,4 +77,9 @@ create_help_buttons()
 add_handlers()
 
 LOGGER.info(f"Bot Started! @{TgClient.NAME}")
+if KOYEB_MODE:
+    from pathlib import Path
+    from deploy.koyeb_environment import READINESS_FILENAME
+
+    Path(READINESS_FILENAME).write_text("ready", encoding="utf-8")
 bot_loop.run_forever()

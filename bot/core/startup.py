@@ -247,6 +247,10 @@ async def update_variables():
 
 
 async def load_configurations():
+    from deploy.koyeb_profile import apply_low_memory_profile
+
+    if apply_low_memory_profile(".", Config, aria2_options, qbit_options):
+        LOGGER.info("Low-memory profile enabled: one transfer at a time")
 
     if not await aiopath.exists(".netrc"):
         async with aiopen(".netrc", "w"):
