@@ -15,8 +15,8 @@ from ..helper.ext_utils.files_utils import clean_all
 from ..helper.telegram_helper.button_build import ButtonMaker
 from ..core.telegram_manager import TgClient
 from ..core.config_manager import Config
-from ..core.jdownloader_booter import jdownloader
 from ..core.torrent_manager import TorrentManager
+from ..core.web_server import stop_web_server
 
 
 @new_task
@@ -84,6 +84,8 @@ async def confirm_restart(_, query):
     data = query.data.split()
     message = query.message
     if data[1] == "confirm":
+        from ..core.jdownloader_booter import jdownloader
+
         koyeb_mode = environ.get("MLTB_KOYEB", "").lower() in {"true", "1", "yes", "on"}
         if koyeb_mode:
             from deploy.koyeb_environment import clear_readiness
@@ -106,6 +108,7 @@ async def confirm_restart(_, query):
             for intvl in list(st.values()):
                 intvl.cancel()
         await clean_all()
+        await stop_web_server()
         await TorrentManager.close_all()
         if sabnzbd_client.LOGGED_IN:
             await gather(
@@ -130,7 +133,7 @@ async def confirm_restart(_, query):
             "pkill",
             "-9",
             "-f",
-            "gunicorn|aria2c|qbittorrent-nox|ffmpeg|rclone|java|sabnzbdplus|7z|split",
+            "aria2c|qbittorrent-nox|ffmpeg|rclone|java|sabnzbdplus|7z|split",
         )
         if koyeb_mode:
             await proc1.wait()

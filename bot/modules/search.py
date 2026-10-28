@@ -1,6 +1,8 @@
 from httpx import AsyncClient
 from html import escape
 from urllib.parse import quote
+from asyncio import Lock
+from deploy.koyeb_profile import low_memory_enabled
 
 from .. import LOGGER
 from ..core.config_manager import Config
@@ -14,19 +16,31 @@ from ..helper.telegram_helper.message_utils import edit_message, send_message
 PLUGINS = []
 SITES = None
 TELEGRAPH_LIMIT = 300
+_search_initialized = False
+_plugins_initialized = False
+_plugin_lock = Lock()
 
 
-async def initiate_search_tools():
-    qb_plugins = await TorrentManager.qbittorrent.search.plugins()
-    if qb_plugins:
-        names = [plugin.name for plugin in qb_plugins]
-        await TorrentManager.qbittorrent.search.uninstall_plugin(names)
+async def initiate_search_tools(initialize_qbit=None):
+    global _search_initialized, _plugins_initialized, SITES
+    if initialize_qbit is None:
+        initialize_qbit = not low_memory_enabled()
+    if initialize_qbit:
+        await TorrentManager.ensure_qbit()
+        qb_plugins = await TorrentManager.qbittorrent.search.plugins()
+        if qb_plugins:
+            names = [plugin.name for plugin in qb_plugins]
+            await TorrentManager.qbittorrent.search.uninstall_plugin(names)
         PLUGINS.clear()
-    if Config.SEARCH_PLUGINS:
-        await TorrentManager.qbittorrent.search.install_plugin(Config.SEARCH_PLUGINS)
+        if Config.SEARCH_PLUGINS:
+            await TorrentManager.qbittorrent.search.install_plugin(Config.SEARCH_PLUGINS)
+        _plugins_initialized = True
+    else:
+        _plugins_initialized = False
+        PLUGINS.clear()
 
+    SITES = None
     if Config.SEARCH_API_LINK:
-        global SITES
         try:
             async with AsyncClient() as client:
                 response = await client.get(f"{Config.SEARCH_API_LINK}/api/v1/sites")
@@ -40,6 +54,15 @@ async def initiate_search_tools():
                 f"{e} Can't fetching sites from SEARCH_API_LINK make sure use latest version of API"
             )
             SITES = None
+    _search_initialized = True
+
+
+async def _ensure_plugins():
+    async with _plugin_lock:
+        if not _plugins_initialized:
+            await initiate_search_tools(initialize_qbit=True)
+        else:
+            await TorrentManager.ensure_qbit()
 
 
 async def search(key, site, message, method):
@@ -86,6 +109,7 @@ async def search(key, site, message, method):
             await edit_message(message, str(e))
             return
     else:
+        await _ensure_plugins()
         LOGGER.info(f"PLUGINS Searching: {key} from {site}")
         search = await TorrentManager.qbittorrent.search.start(
             pattern=key, plugins=[site], category="all"
@@ -205,6 +229,7 @@ def api_buttons(user_id, method):
 
 
 async def plugin_buttons(user_id):
+    await _ensure_plugins()
     buttons = ButtonMaker()
     if not PLUGINS:
         pl = await TorrentManager.qbittorrent.search.plugins()
@@ -221,6 +246,8 @@ async def plugin_buttons(user_id):
 
 @new_task
 async def torrent_search(_, message):
+    if not _search_initialized:
+        await initiate_search_tools()
     user_id = message.from_user.id
     buttons = ButtonMaker()
     key = message.text.split()
@@ -259,7 +286,10 @@ async def torrent_search_update(_, query):
     data = query.data.split()
     if user_id != int(data[1]):
         await query.answer("Not Yours!", show_alert=True)
-    elif data[2].startswith("api"):
+        return
+    if not _search_initialized:
+        await initiate_search_tools()
+    if data[2].startswith("api"):
         await query.answer()
         button = api_buttons(user_id, data[2])
         await edit_message(message, "Choose site:", button)

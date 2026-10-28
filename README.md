@@ -68,9 +68,21 @@ restored, so saved engine preferences do not undo these startup limits.
 Telegram clients use two update workers, one simultaneous transfer, and smaller
 message/topic caches in this mode.
 
-This is a conservative starting profile, not a guaranteed RAM ceiling. The bot
-still starts aria2, qBittorrent, and SABnzbd; large transfers, extraction, media
-processing, or many files can exceed a small instance's memory or disk. Keep
+In this profile, aria2 remains available while qBittorrent and SABnzbd start on
+their first torrent, search, NZB, or settings request. They stop after five
+minutes of confirmed inactivity; active or paused jobs, seeding, running
+searches, and uncertain API responses keep them running. Their saved settings
+are restored when they start again. The first request can take longer while its
+engine starts. Status checks and health checks do not start an unused engine.
+
+The web service uses one Uvicorn process in low-memory mode. Command handlers
+and optional cloud, gallery, search, and download integrations load on first
+use. Libraries already used generally remain cached until the bot restarts.
+Configured RSS subscriptions and background integrations still resume at startup.
+
+This is a conservative starting profile, not a guaranteed RAM ceiling. Large
+transfers, extraction, media processing, or many files can exceed a small
+instance's memory or disk. Keep
 `JD_EMAIL` and `JD_PASS` empty to avoid starting JDownloader's Java process.
 On a larger instance, set `MLTB_LOW_MEMORY=false` and adjust the queue settings
 explicitly if you want more concurrency.

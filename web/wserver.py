@@ -2,13 +2,13 @@ from uvloop import install
 
 install()
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from logging import getLogger, FileHandler, StreamHandler, INFO, basicConfig, WARNING
 from pathlib import Path
 from deploy.koyeb_environment import READINESS_FILENAME
-from asyncio import sleep
+from asyncio import Lock, sleep, wait_for
 from sabnzbdapi import SabnzbdClient
 from aioaria2 import Aria2HttpClient
 from aioqbt.client import create_client
@@ -22,6 +22,7 @@ getLogger("aiohttp").setLevel(WARNING)
 
 aria2 = None
 qbittorrent = None
+qbit_lock = Lock()
 sabnzbd_client = SabnzbdClient(
     host="http://localhost",
     api_key="mltb",
@@ -33,10 +34,43 @@ sabnzbd_client = SabnzbdClient(
 async def lifespan(app: FastAPI):
     global aria2, qbittorrent
     aria2 = Aria2HttpClient("http://localhost:6800/jsonrpc")
-    qbittorrent = await create_client("http://localhost:8090/api/v2/")
-    yield
-    await aria2.close()
-    await qbittorrent.close()
+    try:
+        yield
+    finally:
+        await aria2.close()
+        if qbittorrent is not None:
+            await qbittorrent.close()
+            qbittorrent = None
+        if sabnzbd_client.LOGGED_IN:
+            await sabnzbd_client.close()
+
+
+async def get_qbittorrent():
+    """Connect only for a qBit selection request after the bot starts its job."""
+    global qbittorrent
+    async with qbit_lock:
+        # A cached HTTP session can retain an invalid cookie across idle
+        # shutdown. Reconnect once in the same request when that session fails.
+        attempts = 2 if qbittorrent is not None else 1
+        for _ in range(attempts):
+            try:
+                if qbittorrent is None:
+                    qbittorrent = await wait_for(
+                        create_client("http://localhost:8090/api/v2/"), timeout=5
+                    )
+                await wait_for(qbittorrent.transfer.info(), timeout=5)
+                return qbittorrent
+            except Exception:
+                if qbittorrent is not None:
+                    try:
+                        await qbittorrent.close()
+                    except Exception:
+                        pass
+                    qbittorrent = None
+        raise HTTPException(
+            status_code=503,
+            detail="The torrent engine is not active. Start a torrent task in the bot first.",
+        ) from None
 
 
 app = FastAPI(lifespan=lifespan)
@@ -131,6 +165,9 @@ async def handle_torrent(request: Request):
                 "message": "The PIN you entered is incorrect",
             }
         )
+
+    if not gid.startswith("SABnzbd_nzo") and len(gid) > 20:
+        await get_qbittorrent()
 
     if request.method == "POST":
         if not (mode := params.get("mode")):

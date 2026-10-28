@@ -2,6 +2,7 @@ from . import LOGGER, bot_loop
 from .core.telegram_manager import TgClient
 from .core.config_manager import Config
 from os import environ
+from deploy.koyeb_profile import low_memory_enabled
 
 KOYEB_MODE = environ.get("MLTB_KOYEB", "").lower() in {"true", "1", "yes", "on"}
 if KOYEB_MODE:
@@ -39,31 +40,35 @@ async def main():
     from .core.torrent_manager import TorrentManager
 
     await TorrentManager.initiate()
-    await gather(
-        update_qb_options(),
-        update_aria2_options(),
-        update_nzb_options(),
-    )
+    updates = [update_aria2_options()]
+    if not low_memory_enabled():
+        updates.extend((update_qb_options(), update_nzb_options()))
+    await gather(*updates)
+    if low_memory_enabled():
+        from .core.engine_manager import start_idle_monitor
+        start_idle_monitor()
     from .helper.ext_utils.files_utils import clean_all
-    from .core.jdownloader_booter import jdownloader
-    from .helper.ext_utils.telegraph_helper import telegraph
-    from .helper.mirror_leech_utils.rclone_utils.serve import rclone_serve_booter
     from .modules import (
         initiate_search_tools,
         get_packages_version,
         restart_notification,
     )
 
-    await gather(
-        save_settings(),
-        jdownloader.boot(),
-        clean_all(),
-        initiate_search_tools(),
-        get_packages_version(),
-        restart_notification(),
-        telegraph.create_account(),
-        rclone_serve_booter(),
-    )
+    background = [save_settings(), clean_all(), restart_notification()]
+    if not low_memory_enabled() or (Config.JD_EMAIL and Config.JD_PASS):
+        from .core.jdownloader_booter import jdownloader
+        background.append(jdownloader.boot())
+    if not low_memory_enabled():
+        from .helper.ext_utils.telegraph_helper import telegraph
+        background.extend((initiate_search_tools(), get_packages_version(), telegraph.create_account()))
+    if not low_memory_enabled() or Config.RCLONE_SERVE_URL:
+        from .helper.mirror_leech_utils.rclone_utils.serve import rclone_serve_booter
+        background.append(rclone_serve_booter())
+    # RSS subscriptions must resume even though command modules are now lazy.
+    from . import rss_dict
+    if rss_dict:
+        from .modules import rss
+    await gather(*background)
 
     from .core.command_menu import install_command_menu
 

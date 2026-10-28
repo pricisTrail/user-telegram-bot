@@ -38,6 +38,8 @@ from ..helper.ext_utils.bot_utils import (
 from ..core.config_manager import Config
 from ..core.telegram_manager import TgClient
 from ..core.torrent_manager import TorrentManager
+from ..core.web_server import start_web_server, stop_web_server
+from ..core.engine_manager import ensure_nzb
 from ..core.startup import update_qb_options, update_nzb_options, update_variables
 from ..helper.ext_utils.db_handler import database
 from ..core.jdownloader_booter import jdownloader
@@ -68,6 +70,10 @@ DEFAULT_VALUES = {
 
 
 async def get_buttons(key=None, edit_type=None):
+    if key == "qbit":
+        await TorrentManager.ensure_qbit()
+    elif isinstance(key, str) and (key == "nzb" or key.startswith("nzbser")):
+        await ensure_nzb()
     buttons = ButtonMaker()
     if key is None:
         buttons.data_button("Config Variables", "botset var")
@@ -264,10 +270,7 @@ async def edit_variable(_, message, pre_message, key):
     elif key == "BASE_URL_PORT":
         value = int(value)
         if Config.BASE_URL:
-            await (await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")).wait()
-            await create_subprocess_shell(
-                f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{value}"
-            )
+            await start_web_server(value)
     elif key == "EXCLUDED_EXTENSIONS":
         fx = value.split()
         excluded_extensions.clear()
@@ -317,7 +320,12 @@ async def edit_variable(_, message, pre_message, key):
     await update_buttons(pre_message, "var")
     await delete_message(message)
     await database.update_config({key: value})
-    if key in ["SEARCH_PLUGINS", "SEARCH_API_LINK"]:
+    if key == "BASE_URL":
+        if value:
+            await start_web_server(Config.BASE_URL_PORT)
+        else:
+            await stop_web_server()
+    elif key in ["SEARCH_PLUGINS", "SEARCH_API_LINK"]:
         await initiate_search_tools()
     elif key in ["QUEUE_ALL", "QUEUE_DOWNLOAD", "QUEUE_UPLOAD"]:
         await start_from_queued()
@@ -333,6 +341,7 @@ async def edit_variable(_, message, pre_message, key):
     elif key == "RSS_DELAY":
         add_job()
     elif key == "USENET_SERVERS":
+        await ensure_nzb()
         for s in value:
             await sabnzbd_client.set_special_config("servers", s)
 
@@ -355,6 +364,7 @@ async def edit_aria(_, message, pre_message, key):
 
 @new_task
 async def edit_qbit(_, message, pre_message, key):
+    await TorrentManager.ensure_qbit()
     handler_dict[message.chat.id] = False
     value = str(message.text)
     if value.lower() == "true":
@@ -374,6 +384,7 @@ async def edit_qbit(_, message, pre_message, key):
 
 @new_task
 async def edit_nzb(_, message, pre_message, key):
+    await ensure_nzb()
     handler_dict[message.chat.id] = False
     value = str(message.text)
     if value.isdigit():
@@ -394,6 +405,7 @@ async def edit_nzb(_, message, pre_message, key):
 
 @new_task
 async def edit_nzb_server(_, message, pre_message, key, index=0):
+    await ensure_nzb()
     handler_dict[message.chat.id] = False
     value = str(message.text)
     if key == "newser":
@@ -548,6 +560,10 @@ async def event_handler(client, query, pfunc, rfunc, document=False):
 async def edit_bot_settings(client, query):
     data = query.data.split()
     message = query.message
+    if data[1] in {"syncqbit", "emptyqbit", "qbitvar"}:
+        await TorrentManager.ensure_qbit()
+    elif data[1] in {"resetnzb", "syncnzb", "emptynzb", "remser", "emptyserkey", "nzbvar"} or data[1].startswith("nzbsevar"):
+        await ensure_nzb()
     handler_dict[message.chat.id] = False
     if data[1] == "close":
         await query.answer()
@@ -610,16 +626,11 @@ async def edit_bot_settings(client, query):
             await TorrentManager.change_aria2_option("bt-stop-timeout", "0")
             await database.update_aria2("bt-stop-timeout", "0")
         elif data[2] == "BASE_URL":
-            await (await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")).wait()
+            await stop_web_server()
         elif data[2] == "BASE_URL_PORT":
             value = 80
             if Config.BASE_URL:
-                await (
-                    await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")
-                ).wait()
-                await create_subprocess_shell(
-                    f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{value}"
-                )
+                await start_web_server(value)
         elif data[2] == "GDRIVE_ID":
             if drives_names and drives_names[0] == "Main":
                 drives_names.pop(0)
@@ -633,6 +644,7 @@ async def edit_bot_settings(client, query):
         elif data[2] in ["JD_EMAIL", "JD_PASS"]:
             await create_subprocess_exec("pkill", "-9", "-f", "java")
         elif data[2] == "USENET_SERVERS":
+            await ensure_nzb()
             for s in Config.USENET_SERVERS:
                 await sabnzbd_client.delete_config("servers", s["name"])
         elif data[2] == "AUTHORIZED_CHATS":
@@ -877,11 +889,10 @@ async def load_config():
     if not Config.INCOMPLETE_TASK_NOTIFIER:
         await database.trunc_table("tasks")
 
-    await (await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")).wait()
     if Config.BASE_URL:
-        await create_subprocess_shell(
-            f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{Config.BASE_URL_PORT}"
-        )
+        await start_web_server(Config.BASE_URL_PORT)
+    else:
+        await stop_web_server()
 
     if Config.DATABASE_URL:
         await database.connect()

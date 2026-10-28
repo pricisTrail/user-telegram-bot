@@ -1,7 +1,7 @@
 from aiofiles.os import path as aiopath, listdir, remove
 from asyncio import sleep, gather
 from html import escape
-from requests import utils as rutils
+from urllib.parse import quote
 
 from ... import (
     intervals,
@@ -34,16 +34,8 @@ from ..ext_utils.files_utils import (
 from ..ext_utils.links_utils import is_gdrive_id
 from ..ext_utils.status_utils import get_readable_file_size
 from ..ext_utils.task_manager import start_from_queued, check_running_tasks
-from ..mirror_leech_utils.gdrive_utils.upload import GoogleDriveUpload
-from ..mirror_leech_utils.rclone_utils.transfer import RcloneTransferHelper
-from ..mirror_leech_utils.upload_utils.buzzheavier_uploader import BuzzHeavierUploader
-from ..mirror_leech_utils.upload_utils.gofile_uploader import GoFileUploader
-from ..mirror_leech_utils.status_utils.gdrive_status import GoogleDriveStatus
 from ..mirror_leech_utils.status_utils.queue_status import QueueStatus
-from ..mirror_leech_utils.status_utils.rclone_status import RcloneStatus
 from ..mirror_leech_utils.status_utils.telegram_status import TelegramStatus
-from ..mirror_leech_utils.status_utils.buzzheavier_status import BuzzHeavierStatus
-from ..mirror_leech_utils.status_utils.gofile_status import GoFileStatus
 from ..mirror_leech_utils.upload_utils.telegram_uploader import TelegramUploader
 from ..telegram_helper.button_build import ButtonMaker
 from ..telegram_helper.message_utils import (
@@ -306,6 +298,9 @@ class TaskListener(TaskConfig):
             )
             del tg
         elif self.is_buzzheavier:
+            from ..mirror_leech_utils.upload_utils.buzzheavier_uploader import BuzzHeavierUploader
+            from ..mirror_leech_utils.status_utils.buzzheavier_status import BuzzHeavierStatus
+
             LOGGER.info(f"BuzzHeavier Upload Name: {self.name}")
             bh = BuzzHeavierUploader(self, up_path)
             async with task_dict_lock:
@@ -316,6 +311,9 @@ class TaskListener(TaskConfig):
             )
             del bh
         elif self.is_gofile:
+            from ..mirror_leech_utils.upload_utils.gofile_uploader import GoFileUploader
+            from ..mirror_leech_utils.status_utils.gofile_status import GoFileStatus
+
             LOGGER.info(f"GoFile Upload Name: {self.name}")
             gf = GoFileUploader(self, up_path)
             async with task_dict_lock:
@@ -326,6 +324,9 @@ class TaskListener(TaskConfig):
             )
             del gf
         elif is_gdrive_id(self.up_dest):
+            from ..mirror_leech_utils.gdrive_utils.upload import GoogleDriveUpload
+            from ..mirror_leech_utils.status_utils.gdrive_status import GoogleDriveStatus
+
             LOGGER.info(f"Gdrive Upload Name: {self.name}")
             drive = GoogleDriveUpload(self, up_path)
             async with task_dict_lock:
@@ -337,6 +338,9 @@ class TaskListener(TaskConfig):
             del drive
         else:
             LOGGER.info(f"Rclone Upload Name: {self.name}")
+            from ..mirror_leech_utils.rclone_utils.transfer import RcloneTransferHelper
+            from ..mirror_leech_utils.status_utils.rclone_status import RcloneStatus
+
             RCTransfer = RcloneTransferHelper(self)
             async with task_dict_lock:
                 task_dict[self.mid] = RcloneStatus(self, RCTransfer, gid, "up")
@@ -397,7 +401,7 @@ class TaskListener(TaskConfig):
                     msg += f"\n\nPath: <code>{rclone_path}</code>"
                 if rclone_path and Config.RCLONE_SERVE_URL and not self.private_link:
                     remote, rpath = rclone_path.split(":", 1)
-                    url_path = rutils.quote(f"{rpath}")
+                    url_path = quote(f"{rpath}")
                     share_url = f"{Config.RCLONE_SERVE_URL}/{remote}/{url_path}"
                     if mime_type == "Folder":
                         share_url += "/"

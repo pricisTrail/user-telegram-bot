@@ -1,4 +1,4 @@
-from asyncio import sleep
+from asyncio import sleep, Lock
 from secrets import token_urlsafe
 from telegraph.aio import Telegraph
 from telegraph.exceptions import RetryAfterError
@@ -11,19 +11,29 @@ class TelegraphHelper:
         self._telegraph = Telegraph(domain="graph.org")
         self._author_name = author_name
         self._author_url = author_url
+        self._account_ready = False
+        self._account_lock = Lock()
 
     async def create_account(self):
-        LOGGER.info("Creating Telegraph Account")
-        try:
-            await self._telegraph.create_account(
-                short_name=token_urlsafe(8),
-                author_name=self._author_name,
-                author_url=self._author_url,
-            )
-        except Exception as e:
-            LOGGER.error(f"Failed to create Telegraph Account: {e}")
+        async with self._account_lock:
+            if self._account_ready:
+                return True
+            LOGGER.info("Creating Telegraph Account")
+            try:
+                await self._telegraph.create_account(
+                    short_name=token_urlsafe(8),
+                    author_name=self._author_name,
+                    author_url=self._author_url,
+                )
+            except Exception as exc:
+                LOGGER.error("Unable to create Telegraph account (%s)", type(exc).__name__)
+                return False
+            self._account_ready = True
+            return True
 
     async def create_page(self, title, content):
+        if not await self.create_account():
+            raise RuntimeError("Unable to prepare the search results page. Please retry later.")
         try:
             return await self._telegraph.create_page(
                 title=title,
@@ -39,6 +49,8 @@ class TelegraphHelper:
             return await self.create_page(title, content)
 
     async def edit_page(self, path, title, content):
+        if not await self.create_account():
+            raise RuntimeError("Unable to prepare the search results page. Please retry later.")
         try:
             return await self._telegraph.edit_page(
                 path=path,
@@ -82,5 +94,3 @@ class TelegraphHelper:
 telegraph = TelegraphHelper(
     "Mirror-Leech-Telegram-Bot", "https://github.com/anasty17/mirror-leech-telegram-bot"
 )
-
-print(__name__)

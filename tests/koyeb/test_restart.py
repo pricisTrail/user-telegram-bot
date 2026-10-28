@@ -58,6 +58,8 @@ class RestartTests(unittest.IsolatedAsyncioTestCase):
         module("bot.core.config_manager", Config=SimpleNamespace())
         module("bot.core.jdownloader_booter", jdownloader=SimpleNamespace(is_connected=False))
         module("bot.core.torrent_manager", TorrentManager=SimpleNamespace(close_all=AsyncMock()))
+        self.stop_web_server = AsyncMock(side_effect=lambda: self.events.append("stop-web"))
+        module("bot.core.web_server", stop_web_server=self.stop_web_server)
         self.clear_readiness = Mock(side_effect=lambda: self.events.append("clear-readiness"))
         module("deploy.koyeb_environment", clear_readiness=self.clear_readiness)
         self.intervals = {"stopAll": False, "qb": "", "jd": "", "nzb": "", "status": {}}
@@ -108,6 +110,8 @@ class RestartTests(unittest.IsolatedAsyncioTestCase):
         self.clear_readiness.assert_called_once_with()
         self.assertLess(self.events.index("clear-readiness"), self.events.index("stop-client"))
         self.assertLess(self.events.index("wait:pkill"), self.events.index("exec"))
+        self.stop_web_server.assert_awaited_once()
+        self.assertLess(self.events.index("stop-web"), self.events.index("spawn:pkill"))
         self.assertTrue(self.intervals["stopAll"])
 
     async def test_default_restart_keeps_updater_and_module_entrypoint(self):

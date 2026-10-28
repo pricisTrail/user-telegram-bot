@@ -65,6 +65,13 @@ async def add_servers():
 
 
 async def add_nzb(listener, path):
+    from ....core.engine_manager import ensure_nzb
+
+    try:
+        await ensure_nzb()
+    except Exception:
+        await listener.on_download_error("Unable to start SABnzbd. Check the service runtime and try again.")
+        return
     if not sabnzbd_client.LOGGED_IN:
         try:
             await add_servers()

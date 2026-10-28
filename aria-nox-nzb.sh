@@ -21,6 +21,7 @@ case "${low_memory_mode,,}" in
         aria_split=2
         aria_cache=8M
         aria_optimize=false
+        start_optional_engines=false
         ;;
     *)
         aria_peers=0
@@ -30,6 +31,7 @@ case "${low_memory_mode,,}" in
         aria_split=10
         aria_cache=40M
         aria_optimize=true
+        start_optional_engines=true
         ;;
 esac
 
@@ -41,5 +43,7 @@ aria2c --allow-overwrite=true --auto-file-renaming=true --bt-enable-lpd=true --b
        --http-accept-gzip=true --max-file-not-found=0 --max-tries=20  --peer-id-prefix=-qB4520- --reuse-uri=true \
        --content-disposition-default-utf8=true --user-agent=Wget/1.12 --peer-agent=qBittorrent/4.5.2 --quiet=true \
        --summary-interval=0 --max-upload-limit=1K
-qbittorrent-nox -d --profile="$(pwd)"
-sabnzbdplus -f sabnzbd/SABnzbd.ini -s :::8070 -b 0 -d -c -l 0 --console
+if "$start_optional_engines"; then
+    qbittorrent-nox -d --profile="$(pwd)"
+    sabnzbdplus -f sabnzbd/SABnzbd.ini -s :::8070 -b 0 -d -c -l 0 --console
+fi

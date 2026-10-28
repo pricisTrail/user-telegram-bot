@@ -1,7 +1,8 @@
 from aiofiles.os import path as aiopath, remove, makedirs
 from aiofiles import open as aiopen
 from aioshutil import rmtree
-from asyncio import create_subprocess_exec, create_subprocess_shell, sleep
+from asyncio import create_subprocess_exec, create_subprocess_shell, sleep, wait_for
+from time import monotonic
 from importlib import import_module
 
 from .. import (
@@ -54,11 +55,17 @@ async def update_aria2_options():
 
 async def update_nzb_options():
     LOGGER.info("Get SABnzbd options from server")
+    deadline = monotonic() + 25
     while True:
         try:
-            no = (await sabnzbd_client.get_config())["config"]["misc"]
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise RuntimeError("SABnzbd did not become ready within 25 seconds")
+            no = (await wait_for(sabnzbd_client.get_config(), remaining))["config"]["misc"]
             nzb_options.update(no)
-        except:
+        except Exception:
+            if monotonic() >= deadline:
+                raise RuntimeError("SABnzbd did not become ready within 25 seconds") from None
             await sleep(0.5)
             continue
         break
@@ -263,9 +270,8 @@ async def load_configurations():
     ).wait()
 
     if Config.BASE_URL:
-        await create_subprocess_shell(
-            f"gunicorn -k uvicorn.workers.UvicornWorker -w 1 web.wserver:app --bind 0.0.0.0:{Config.BASE_URL_PORT}"
-        )
+        from .web_server import start_web_server
+        await start_web_server(Config.BASE_URL_PORT)
 
     if await aiopath.exists("cfg.zip"):
         if await aiopath.exists("/JDownloader/cfg"):

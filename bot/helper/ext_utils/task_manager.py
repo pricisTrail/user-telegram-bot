@@ -9,7 +9,6 @@ from ... import (
     LOGGER,
 )
 from ...core.config_manager import Config
-from ..mirror_leech_utils.gdrive_utils.search import GoogleDriveSearch
 from .bot_utils import sync_to_async, get_telegraph_list
 from .files_utils import get_base_name
 from .links_utils import is_gdrive_id
@@ -37,6 +36,8 @@ async def stop_duplicate_check(listener):
             name = None
 
     if name is not None:
+        from ..mirror_leech_utils.gdrive_utils.search import GoogleDriveSearch
+
         telegraph_content, contents_no = await sync_to_async(
             GoogleDriveSearch(stop_dup=True, no_multi=listener.is_clone).drive_list,
             name,
