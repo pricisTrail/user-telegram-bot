@@ -29,8 +29,6 @@ from ..core.config_manager import Config
 from ..core.telegram_manager import TgClient
 from .ext_utils.bot_utils import new_task, sync_to_async, get_size_bytes
 from .ext_utils.bulk_links import extract_bulk_links
-from .mirror_leech_utils.gdrive_utils.list import GoogleDriveList
-from .mirror_leech_utils.rclone_utils.list import RcloneList
 from .mirror_leech_utils.status_utils.sevenz_status import SevenZStatus
 from .mirror_leech_utils.status_utils.ffmpeg_status import FFmpegStatus
 from .telegram_helper.bot_commands import BotCommands
@@ -221,11 +219,15 @@ class TaskConfig:
                     await self.is_token_exists(self.link, "dl")
         elif self.link == "rcl":
             if not self.is_ytdlp and not self.is_jd and not self.is_gallerydl:
+                from .mirror_leech_utils.rclone_utils.list import RcloneList
+
                 self.link = await RcloneList(self).get_rclone_path("rcd")
                 if not is_rclone_path(self.link):
                     raise ValueError(self.link)
         elif self.link == "gdl":
             if not self.is_ytdlp and not self.is_jd and not self.is_gallerydl:
+                from .mirror_leech_utils.gdrive_utils.list import GoogleDriveList
+
                 self.link = await GoogleDriveList(self).get_target_id("gdd")
                 if not is_gdrive_id(self.link):
                     raise ValueError(self.link)
@@ -335,6 +337,8 @@ class TaskConfig:
                 await self.is_token_exists(self.up_dest, "up")
 
             if self.up_dest == "rcl":
+                from .mirror_leech_utils.rclone_utils.list import RcloneList
+
                 if self.is_clone:
                     if not is_rclone_path(self.link):
                         raise ValueError(
@@ -349,6 +353,8 @@ class TaskConfig:
                 if not is_rclone_path(self.up_dest):
                     raise ValueError(self.up_dest)
             elif self.up_dest == "gdl":
+                from .mirror_leech_utils.gdrive_utils.list import GoogleDriveList
+
                 if self.is_clone:
                     if not is_gdrive_link(self.link):
                         raise ValueError(

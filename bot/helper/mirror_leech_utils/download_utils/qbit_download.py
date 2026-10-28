@@ -44,6 +44,7 @@ def _get_hash_file(fpath):
 
 async def add_qb_torrent(listener, path, ratio, seed_time):
     try:
+        await TorrentManager.ensure_qbit()
         form = AddFormBuilder.with_client(TorrentManager.qbittorrent)
         if await aiopath.exists(listener.link):
             async with aiopen(listener.link, "rb") as f:

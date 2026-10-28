@@ -2,6 +2,8 @@ from pyrogram import Client, enums
 from pyrogram.types import LinkPreviewOptions
 from asyncio import Lock
 
+from deploy.koyeb_profile import telegram_client_options
+
 from .. import LOGGER
 from .config_manager import Config
 
@@ -27,9 +29,7 @@ class TgClient:
             bot_token=Config.BOT_TOKEN,
             workdir="/app",
             parse_mode=enums.ParseMode.HTML,
-            max_concurrent_transmissions=10,
-            max_message_cache_size=15000,
-            max_topic_cache_size=15000,
+            **telegram_client_options(),
             sleep_threshold=0,
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
@@ -50,9 +50,7 @@ class TgClient:
                     workdir="/app",
                     parse_mode=enums.ParseMode.HTML,
                     sleep_threshold=60,
-                    max_concurrent_transmissions=10,
-                    max_message_cache_size=15000,
-                    max_topic_cache_size=15000,
+                    **telegram_client_options(),
                     link_preview_options=LinkPreviewOptions(is_disabled=True),
                 )
                 await cls.user.start()

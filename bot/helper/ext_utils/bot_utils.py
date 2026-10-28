@@ -12,7 +12,6 @@ from asyncio import (
 from ... import user_data, bot_loop
 from ...core.config_manager import Config
 from ..telegram_helper.button_build import ButtonMaker
-from .telegraph_helper import telegraph
 from .help_messages import (
     YT_HELP_DICT,
     GDL_HELP_DICT,
@@ -73,6 +72,8 @@ def bt_selection_buttons(id_):
 
 
 async def get_telegraph_list(telegraph_content):
+    from .telegraph_helper import telegraph
+
     path = [
         (
             await telegraph.create_page(

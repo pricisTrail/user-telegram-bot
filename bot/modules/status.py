@@ -2,6 +2,7 @@ from psutil import cpu_percent, virtual_memory, disk_usage
 from time import time
 from asyncio import gather
 from inspect import iscoroutinefunction
+import sys
 
 from .. import (
     task_dict_lock,
@@ -13,7 +14,6 @@ from .. import (
     DOWNLOAD_DIR,
 )
 from ..core.torrent_manager import TorrentManager
-from ..core.jdownloader_booter import jdownloader
 from ..helper.ext_utils.bot_utils import new_task
 from ..helper.ext_utils.status_utils import (
     MirrorStatus,
@@ -108,7 +108,9 @@ async def status_pages(_, query):
             sds = await sabnzbd_client.get_downloads()
             sds = int(float(sds["queue"].get("kbpersec", "0"))) * 1024
             ds += sds
-        if jdownloader.is_connected:
+        jd_module = sys.modules.get("bot.core.jdownloader_booter")
+        jdownloader = getattr(jd_module, "jdownloader", None)
+        if jdownloader is not None and jdownloader.is_connected:
             jdres = await jdownloader.device.downloadcontroller.get_speed_in_bytes()
             ds += jdres
         message = query.message

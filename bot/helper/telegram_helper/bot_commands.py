@@ -11,6 +11,7 @@ class BotCommands:
     GallerydlCommand = [f"gallerydl{i}", f"gdl{i}"]
     NzbMirrorCommand = [f"nzbmirror{i}", f"nm{i}"]
     LeechCommand = [f"leech{i}", f"l{i}"]
+    FfmpegLeechCommand = f"ffl{i}"
     QbLeechCommand = [f"qbleech{i}", f"ql{i}"]
     JdLeechCommand = [f"jdleech{i}", f"jl{i}"]
     YtdlLeechCommand = [f"ytdlleech{i}", f"yl{i}"]

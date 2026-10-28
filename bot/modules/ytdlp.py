@@ -4,7 +4,6 @@ from functools import partial
 from pyrogram.filters import regex, user
 from pyrogram.handlers import CallbackQueryHandler
 from time import time
-from yt_dlp import YoutubeDL
 
 from .. import LOGGER, bot_loop, task_dict_lock, DOWNLOAD_DIR
 from ..core.config_manager import Config
@@ -17,7 +16,6 @@ from ..helper.ext_utils.bot_utils import (
 from ..helper.ext_utils.links_utils import is_url
 from ..helper.ext_utils.status_utils import get_readable_file_size, get_readable_time
 from ..helper.listeners.task_listener import TaskListener
-from ..helper.mirror_leech_utils.download_utils.yt_dlp_download import YoutubeDLHelper
 from ..helper.telegram_helper.button_build import ButtonMaker
 from ..helper.telegram_helper.message_utils import (
     send_message,
@@ -231,6 +229,8 @@ class YtSelection:
 
 
 def extract_info(link, options):
+    from yt_dlp import YoutubeDL
+
     with YoutubeDL(options) as ydl:
         result = ydl.extract_info(link, download=False)
         if result is None:
@@ -457,6 +457,8 @@ class YtDlp(TaskListener):
 
         LOGGER.info(f"Downloading with YT-DLP: {self.link}")
         playlist = "entries" in result
+        from ..helper.mirror_leech_utils.download_utils.yt_dlp_download import YoutubeDLHelper
+
         ydl = YoutubeDLHelper(self)
         await ydl.add_download(path, qual, playlist, opt)
 

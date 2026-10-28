@@ -1,6 +1,6 @@
 from time import time
 from re import search as research
-from asyncio import gather
+from asyncio import gather, Lock
 from aiofiles.os import path as aiopath
 from psutil import (
     disk_usage,
@@ -27,10 +27,12 @@ commands = {
     "ffmpeg": (["ffmpeg", "-version"], r"ffmpeg version ([\d.]+(-\w+)?).*"),
     "7z": (["7z", "i"], r"7-Zip ([\d.]+)"),
 }
+_version_lock = Lock()
 
 
 @new_task
 async def bot_stats(_, message):
+    await get_packages_version()
     total, used, free, disk = disk_usage("/")
     swap = swap_memory()
     memory = virtual_memory()
@@ -86,12 +88,17 @@ async def get_version_async(command, regex):
         return f"Exception: {str(e)}"
 
 
-@new_task
 async def get_packages_version():
+    async with _version_lock:
+        if "commit" in commands:
+            return
+        await _load_packages_version()
+
+
+async def _load_packages_version():
     tasks = [get_version_async(command, regex) for command, regex in commands.values()]
     versions = await gather(*tasks)
-    for tool, version in zip(commands.keys(), versions):
-        commands[tool] = version
+    version_results = dict(zip(commands.keys(), versions))
     if await aiopath.exists(".git"):
         last_commit = await cmd_exec(
             "git log -1 --date=short --pretty=format:'%cd <b>From</b> %cr'", True
@@ -99,4 +106,5 @@ async def get_packages_version():
         last_commit = last_commit[0]
     else:
         last_commit = "No UPSTREAM_REPO"
-    commands["commit"] = last_commit
+    version_results["commit"] = last_commit
+    commands.update(version_results)

@@ -1,0 +1,23 @@
+FROM anasty17/mltb:latest
+
+USER root
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MLTB_LOW_MEMORY=true \
+    PORT=8080 \
+    QUEUE_ALL=1 \
+    QUEUE_DOWNLOAD=1 \
+    QUEUE_UPLOAD=1
+
+COPY requirements.txt .
+RUN python3 -m venv mltbenv \
+    && mltbenv/bin/pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+RUN sed -i 's/\r$//' *.sh deploy/*.sh \
+    && chmod +x deploy/koyeb-entrypoint.sh
+
+EXPOSE 8080
+CMD ["bash", "deploy/koyeb-entrypoint.sh"]

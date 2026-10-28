@@ -22,38 +22,6 @@ from ..helper.ext_utils.links_utils import (
     is_tldv_link,
 )
 from ..helper.listeners.task_listener import TaskListener
-from ..helper.mirror_leech_utils.download_utils.aria2_download import (
-    add_aria2_download,
-)
-from ..helper.mirror_leech_utils.download_utils.alldebrid_resolver import (
-    alldebrid_resolve,
-    alldebrid_resolve_magnet,
-    alldebrid_resolve_torrent,
-)
-from ..helper.mirror_leech_utils.download_utils.torbox_resolver import (
-    torbox_resolve,
-    torbox_resolve_magnet,
-    torbox_resolve_torrent,
-)
-from ..helper.mirror_leech_utils.download_utils.direct_downloader import (
-    add_direct_download,
-)
-from ..helper.mirror_leech_utils.download_utils.tldv_downloader import (
-    add_tldv_download,
-)
-from ..helper.mirror_leech_utils.download_utils.direct_link_generator import (
-    direct_link_generator,
-)
-from ..helper.mirror_leech_utils.download_utils.gd_download import add_gd_download
-from ..helper.mirror_leech_utils.download_utils.jd_download import add_jd_download
-from ..helper.mirror_leech_utils.download_utils.qbit_download import add_qb_torrent
-from ..helper.mirror_leech_utils.download_utils.nzb_downloader import add_nzb
-from ..helper.mirror_leech_utils.download_utils.rclone_download import (
-    add_rclone_download,
-)
-from ..helper.mirror_leech_utils.download_utils.telegram_download import (
-    TelegramDownloadHelper,
-)
 from ..helper.telegram_helper.message_utils import send_message, get_tg_link_message
 
 
@@ -323,6 +291,10 @@ class Mirror(TaskListener):
             return
 
         if self.is_torbox:
+            from ..helper.mirror_leech_utils.download_utils.torbox_resolver import (
+                torbox_resolve, torbox_resolve_magnet, torbox_resolve_torrent,
+            )
+
             try:
                 if is_magnet(self.link):
                     resolved = await torbox_resolve_magnet(
@@ -363,6 +335,10 @@ class Mirror(TaskListener):
         if self.is_alldebrid and (
             is_magnet(self.link) or self.link.endswith(".torrent")
         ):
+            from ..helper.mirror_leech_utils.download_utils.alldebrid_resolver import (
+                alldebrid_resolve_magnet, alldebrid_resolve_torrent,
+            )
+
             try:
                 if is_magnet(self.link):
                     LOGGER.info("AllDebrid magnet route")
@@ -431,6 +407,8 @@ class Mirror(TaskListener):
                     return
 
             if self.is_alldebrid:
+                from ..helper.mirror_leech_utils.download_utils.alldebrid_resolver import alldebrid_resolve
+
                 try:
                     resolved = await alldebrid_resolve(self.link)
                     if isinstance(resolved, str):
@@ -455,6 +433,8 @@ class Mirror(TaskListener):
                 if content_type is None or re_match(
                     r"text/html|text/plain", content_type
                 ):
+                    from ..helper.mirror_leech_utils.download_utils.direct_link_generator import direct_link_generator
+
                     try:
                         self.link = await sync_to_async(
                             direct_link_generator, self.link
@@ -477,25 +457,43 @@ class Mirror(TaskListener):
                         return
 
         if file_ is not None:
+            from ..helper.mirror_leech_utils.download_utils.telegram_download import TelegramDownloadHelper
+
             await TelegramDownloadHelper(self).add_download(
                 reply_to, f"{path}/", session
             )
         elif isinstance(self.link, dict):
+            from ..helper.mirror_leech_utils.download_utils.direct_downloader import add_direct_download
+
             await add_direct_download(self, path)
         elif self.is_jd:
+            from ..helper.mirror_leech_utils.download_utils.jd_download import add_jd_download
+
             await add_jd_download(self, path)
         elif self.is_qbit:
+            from ..helper.mirror_leech_utils.download_utils.qbit_download import add_qb_torrent
+
             await add_qb_torrent(self, path, ratio, seed_time)
         elif self.is_nzb:
+            from ..helper.mirror_leech_utils.download_utils.nzb_downloader import add_nzb
+
             await add_nzb(self, path)
         elif is_rclone_path(self.link):
+            from ..helper.mirror_leech_utils.download_utils.rclone_download import add_rclone_download
+
             await add_rclone_download(self, f"{path}/")
         elif is_gdrive_link(self.link) or is_gdrive_id(self.link):
+            from ..helper.mirror_leech_utils.download_utils.gd_download import add_gd_download
+
             await add_gd_download(self, path)
         elif is_tldv_link(self.link):
+            from ..helper.mirror_leech_utils.download_utils.tldv_downloader import add_tldv_download
+
             await add_tldv_download(self, path, headers)
         else:
             ussr = args["-au"]
+            from ..helper.mirror_leech_utils.download_utils.aria2_download import add_aria2_download
+
             pssw = args["-ap"]
             if ussr or pssw:
                 auth = f"{ussr}:{pssw}"
