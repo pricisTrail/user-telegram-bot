@@ -1,6 +1,8 @@
 from pathlib import Path
 from traceback import extract_tb
 
+from deploy.koyeb_profile import low_memory_enabled
+
 from .. import LOGGER, bot_loop
 from ..helper.ext_utils.ffmpeg_request import parse_ffmpeg_request
 from ..helper.listeners.task_listener import TaskListener
@@ -31,6 +33,7 @@ class FFmpegLeech(TaskListener):
         self.is_leech = True
         # before_start expects the same empty string supplied by Mirror's parser.
         self.thumb = ""
+        self.skip_generated_thumbnail = low_memory_enabled()
         self._download_error_reported = False
 
     async def on_download_error(self, error, button=None):

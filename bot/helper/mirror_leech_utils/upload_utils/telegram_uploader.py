@@ -2,6 +2,7 @@ from PIL import Image
 from aioshutil import rmtree
 from asyncio import sleep
 from logging import getLogger
+from math import isfinite
 from natsort import natsorted
 from os import walk, path as ospath
 from time import time
@@ -369,7 +370,28 @@ class TelegramUploader:
             self._thumb = None
         thumb = self._thumb
         try:
-            is_video, is_audio, is_image = await get_document_type(self._up_path)
+            skip_generated_thumbnail = getattr(self._listener, "skip_generated_thumbnail", False)
+            video_metadata = getattr(self._listener, "ffmpeg_video_metadata", None)
+            if not (
+                skip_generated_thumbnail
+                and isinstance(video_metadata, dict)
+                and video_metadata.get("path") == self._up_path
+                and isinstance(video_metadata.get("width"), int)
+                and video_metadata["width"] > 0
+                and isinstance(video_metadata.get("height"), int)
+                and video_metadata["height"] > 0
+                and isinstance(video_metadata.get("duration"), (int, float))
+                and isfinite(video_metadata["duration"])
+                and video_metadata["duration"] > 0
+            ):
+                video_metadata = None
+            # An altered output needs the original media preparation, including
+            # its thumbnail-based dimensions; never apply stale metadata to it.
+            skip_generated_thumbnail = video_metadata is not None
+            if video_metadata is not None:
+                is_video, is_audio, is_image = True, False, False
+            else:
+                is_video, is_audio, is_image = await get_document_type(self._up_path)
 
             if not is_image and thumb is None:
                 file_name = ospath.splitext(file)[0]
@@ -378,7 +400,7 @@ class TelegramUploader:
                     thumb = thumb_path
                 elif await aiopath.isfile(thumb_path.replace("/yt-dlp-thumb", "")):
                     thumb = thumb_path.replace("/yt-dlp-thumb", "")
-                elif is_audio and not is_video:
+                elif is_audio and not is_video and not skip_generated_thumbnail:
                     thumb = await get_audio_thumbnail(self._up_path)
 
             if (
@@ -387,7 +409,7 @@ class TelegramUploader:
                 or (not is_video and not is_audio and not is_image)
             ):
                 key = "documents"
-                if is_video and thumb is None:
+                if is_video and thumb is None and not skip_generated_thumbnail:
                     thumb = await get_video_thumbnail(self._up_path, None)
 
                 if self._listener.is_cancelled:
@@ -404,16 +426,22 @@ class TelegramUploader:
                 )
             elif is_video:
                 key = "videos"
-                duration = (await get_media_info(self._up_path))[0]
-                if thumb is None and self._listener.thumbnail_layout:
+                duration = (
+                    round(video_metadata["duration"])
+                    if video_metadata is not None
+                    else (await get_media_info(self._up_path))[0]
+                )
+                if thumb is None and self._listener.thumbnail_layout and not skip_generated_thumbnail:
                     thumb = await get_multiple_frames_thumbnail(
                         self._up_path,
                         self._listener.thumbnail_layout,
                         self._listener.screen_shots,
                     )
-                if thumb is None:
+                if thumb is None and not skip_generated_thumbnail:
                     thumb = await get_video_thumbnail(self._up_path, duration)
-                if thumb is not None and thumb != "none":
+                if video_metadata is not None:
+                    width, height = video_metadata["width"], video_metadata["height"]
+                elif thumb is not None and thumb != "none":
                     with Image.open(thumb) as img:
                         width, height = img.size
                 else:

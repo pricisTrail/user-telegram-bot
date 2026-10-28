@@ -65,6 +65,22 @@ def low_memory_enabled(values: Mapping[str, str] | None = None) -> bool:
     }
 
 
+def telegram_client_options(values: Mapping[str, str] | None = None) -> dict[str, int]:
+    """Keep Telegram's workers and caches proportional to the one-task queue."""
+    if low_memory_enabled(values):
+        return {
+            "workers": 2,
+            "max_concurrent_transmissions": 1,
+            "max_message_cache_size": 500,
+            "max_topic_cache_size": 128,
+        }
+    return {
+        "max_concurrent_transmissions": 10,
+        "max_message_cache_size": 15000,
+        "max_topic_cache_size": 15000,
+    }
+
+
 def patch_ini_section(path: Path, section: str, settings: Mapping[str, str]) -> None:
     """Change just one INI section, preserving SABnzbd's nested-section format."""
     with path.open("r", encoding="utf-8", newline="") as source:

@@ -1,6 +1,7 @@
 """Connect the bounded FFmpeg runner to the bot's normal task lifecycle."""
 
 from asyncio import Lock
+from math import isfinite
 from pathlib import Path
 from secrets import token_urlsafe
 
@@ -37,7 +38,7 @@ class FFmpegDownloader:
 
     async def download(self):
         try:
-            await self.runner.run(self.listener.link, self.path, self.max_height)
+            selection = await self.runner.run(self.listener.link, self.path, self.max_height)
         except FFmpegDownloadCancelled:
             await self._fail("FFmpeg download cancelled by user.")
             return
@@ -49,6 +50,22 @@ class FFmpegDownloader:
             return
         self.listener.subproc = None
         self.listener.size = self.path.stat().st_size
+        # Stream-copy preserves these selected video properties. Keep the cache
+        # tied to this exact output so split/renamed files use normal probing.
+        self.listener.ffmpeg_video_metadata = None
+        if (
+            selection is not None
+            and isinstance(selection.width, int) and selection.width > 0
+            and isinstance(selection.height, int) and selection.height > 0
+            and isinstance(selection.duration, (int, float))
+            and isfinite(selection.duration) and selection.duration > 0
+        ):
+            self.listener.ffmpeg_video_metadata = {
+                "path": str(self.path),
+                "width": selection.width,
+                "height": selection.height,
+                "duration": selection.duration,
+            }
         await self.listener.on_download_complete()
 
     async def cancel_task(self):

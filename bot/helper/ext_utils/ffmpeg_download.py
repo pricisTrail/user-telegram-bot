@@ -31,6 +31,7 @@ class MediaSelection:
     duration: float
     estimated_size: int = 0
     height: int = 0
+    width: int = 0
 
 
 def _number(value):
@@ -39,6 +40,36 @@ def _number(value):
         return number if math.isfinite(number) and number > 0 else 0
     except (ValueError, TypeError, OverflowError):
         return 0
+
+
+def _display_dimensions(stream):
+    """Use display orientation without guessing at an unknown transform."""
+    width = int(_number(stream.get("width")))
+    height = int(_number(stream.get("height")))
+    rotations = []
+    side_data = stream.get("side_data_list", [])
+    if not isinstance(side_data, list):
+        return 0, height
+    for entry in side_data:
+        if isinstance(entry, dict) and "rotation" in entry:
+            rotations.append(entry["rotation"])
+    tags = stream.get("tags", {})
+    if isinstance(tags, dict) and "rotate" in tags:
+        rotations.append(tags["rotate"])
+    orientations = set()
+    for value in rotations:
+        try:
+            angle = float(value)
+            if isinstance(value, bool) or not math.isfinite(angle) or angle % 90:
+                return 0, height
+            orientations.add(int(angle // 90) % 2)
+        except (ValueError, TypeError, OverflowError):
+            return 0, height
+    if len(orientations) > 1:
+        return 0, height
+    if width and height and orientations == {1}:
+        return height, width
+    return width, height
 
 
 def select_streams(metadata, max_height=720):
@@ -67,6 +98,7 @@ def select_streams(metadata, max_height=720):
     ]
     selected = []
     height = 0
+    width = 0
     if videos:
         if not candidates:
             raise FFmpegDownloadError(
@@ -78,7 +110,7 @@ def select_streams(metadata, max_height=720):
             -stream["index"],
         ))
         selected.append(video)
-        height = int(_number(video.get("height")))
+        width, height = _display_dimensions(video)
     audio = [stream for stream in streams if stream.get("codec_type") == "audio"]
     if audio:
         selected.append(max(audio, key=lambda stream: (
@@ -97,7 +129,9 @@ def select_streams(metadata, max_height=720):
     rates = [_number(stream.get("bit_rate")) for stream in selected]
     # Unknown rates remain unknown: do not present an incomplete estimate as a total.
     estimated_size = int(sum(rates) * duration / 8 * 1.03) if all(rates) else 0
-    return MediaSelection(tuple(stream["index"] for stream in selected), duration, estimated_size, height)
+    return MediaSelection(
+        tuple(stream["index"] for stream in selected), duration, estimated_size, height, width
+    )
 
 
 def validate_http_url(url):
@@ -245,7 +279,7 @@ class FFmpegDownloadRunner:
         validate_http_url(url)
         process = await self._spawn(
             "ffprobe", "-v", "error", "-protocol_whitelist", HTTP_PROTOCOLS,
-            "-show_entries", "stream=index,codec_type,height,bit_rate,duration:stream_disposition=attached_pic:format=duration",
+            "-show_entries", "stream=index,codec_type,width,height,bit_rate,duration:stream_disposition=attached_pic:stream_tags=rotate:stream_side_data=rotation:format=duration",
             "-of", "json", "-i", url,
         )
         try:

@@ -26,9 +26,9 @@ spec.loader.exec_module(runner_module)
 
 def metadata(*, finite=True, rates=True):
     streams = [
-        {"index": 0, "codec_type": "video", "height": 1080, "bit_rate": "8000000"},
-        {"index": 1, "codec_type": "video", "height": 720, "bit_rate": "3000000"},
-        {"index": 2, "codec_type": "video", "height": 480, "bit_rate": "1500000"},
+        {"index": 0, "codec_type": "video", "width": 1920, "height": 1080, "bit_rate": "8000000"},
+        {"index": 1, "codec_type": "video", "width": 1280, "height": 720, "bit_rate": "3000000"},
+        {"index": 2, "codec_type": "video", "width": 854, "height": 480, "bit_rate": "1500000"},
         {"index": 3, "codec_type": "audio", "bit_rate": "128000"},
         {"index": 4, "codec_type": "audio", "bit_rate": "192000"},
     ]
@@ -89,6 +89,7 @@ class SelectionTests(unittest.TestCase):
         selected = runner_module.select_streams(metadata())
         self.assertEqual(selected.stream_indices, (1, 4))
         self.assertEqual(selected.height, 720)
+        self.assertEqual(selected.width, 1280)
         self.assertGreater(selected.estimated_size, 0)
         self.assertEqual(runner_module.select_streams(metadata(), 0).stream_indices, (0, 4))
 
@@ -103,6 +104,59 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(selected.stream_indices, (2,))
         self.assertEqual(selected.duration, 25)
         self.assertEqual(selected.estimated_size, 0)
+        self.assertEqual(selected.width, 0)
+
+    def test_invalid_or_missing_width_does_not_become_cached_dimensions(self):
+        for width in (None, "N/A", "nan", "inf", 0, -1):
+            source = metadata()
+            source["streams"][1]["width"] = width
+            with self.subTest(width=width):
+                self.assertEqual(runner_module.select_streams(source).width, 0)
+
+    def test_quarter_turn_rotation_uses_displayed_dimensions(self):
+        for angle, dimensions in (
+            (90, (720, 1280)), (270, (720, 1280)),
+            (-90, (720, 1280)), (450, (720, 1280)),
+            (180, (1280, 720)), (0, (1280, 720)),
+        ):
+            source = metadata()
+            source["streams"][1]["side_data_list"] = [{"rotation": angle}]
+            with self.subTest(angle=angle):
+                selected = runner_module.select_streams(source)
+                self.assertEqual((selected.width, selected.height), dimensions)
+                # The 720p representation is chosen using its coded height.
+                self.assertEqual(selected.stream_indices, (1, 4))
+
+    def test_legacy_rotation_tag_and_missing_rotation(self):
+        source = metadata()
+        source["streams"][1]["tags"] = {"rotate": "270"}
+        selected = runner_module.select_streams(source)
+        self.assertEqual((selected.width, selected.height), (720, 1280))
+        source["streams"][1]["tags"] = {"language": "und"}
+        source["streams"][1]["side_data_list"] = [{}]
+        selected = runner_module.select_streams(source)
+        self.assertEqual((selected.width, selected.height), (1280, 720))
+
+    def test_unknown_or_non_quarter_turn_rotation_disables_dimension_cache(self):
+        for rotation in (None, "invalid", "nan", "inf", 45, 89.999, True):
+            for field in ("side_data_list", "tags"):
+                source = metadata()
+                source["streams"][1][field] = (
+                    [{"rotation": rotation}] if field == "side_data_list"
+                    else {"rotate": rotation}
+                )
+                with self.subTest(rotation=rotation, field=field):
+                    selected = runner_module.select_streams(source)
+                    self.assertEqual(selected.width, 0)
+                    self.assertEqual(selected.height, 720)
+                    self.assertEqual(selected.stream_indices, (1, 4))
+
+    def test_conflicting_rotation_metadata_disables_dimension_cache(self):
+        source = metadata()
+        source["streams"][1].update({
+            "side_data_list": [{"rotation": 90}], "tags": {"rotate": "180"},
+        })
+        self.assertEqual(runner_module.select_streams(source).width, 0)
 
     def test_live_and_nonfinite_sources_are_rejected(self):
         for duration in ("N/A", "nan", "inf", 0, -1):
@@ -163,8 +217,10 @@ class RunnerTests(unittest.IsolatedAsyncioTestCase):
         probe, command = self.calls
         self.assertEqual(probe[probe.index("-protocol_whitelist") + 1], "http,https,tcp,tls")
         entries = probe[probe.index("-show_entries") + 1].split(":")
-        self.assertIn("stream=index,codec_type,height,bit_rate,duration", entries)
+        self.assertIn("stream=index,codec_type,width,height,bit_rate,duration", entries)
         self.assertIn("stream_disposition=attached_pic", entries)
+        self.assertIn("stream_tags=rotate", entries)
+        self.assertIn("stream_side_data=rotation", entries)
         self.assertIn("format=duration", entries)
         maps = [command[index + 1] for index, item in enumerate(command) if item == "-map"]
         self.assertEqual(maps, ["0:1", "0:4"])
@@ -302,6 +358,7 @@ class QueueIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.event = asyncio.Event()
         self.send_status = AsyncMock()
         self.fake_runner = SimpleNamespace(run=AsyncMock(side_effect=self._write_output), cancel=AsyncMock())
+        self.selection = runner_module.MediaSelection((0, 1), 7200, height=720, width=1280)
         modules = {}
         for name in (
             "bot", "bot.helper", "bot.helper.ext_utils", "bot.helper.mirror_leech_utils",
@@ -343,6 +400,7 @@ class QueueIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def _write_output(self, url, path, height):
         Path(path).write_bytes(b"media")
+        return self.selection
 
     async def test_normal_task_enters_existing_completion_pipeline(self):
         await self.adapter.add_ffmpeg_download(self.listener, self.directory.name)
@@ -351,6 +409,22 @@ class QueueIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.listener.on_download_error.assert_not_awaited()
         self.assertEqual(self.listener.size, 5)
         self.assertEqual(self.tasks[123].state, "download")
+        self.assertEqual(self.listener.ffmpeg_video_metadata, {
+            "path": str(Path(self.directory.name) / "result.mp4"),
+            "duration": 7200, "width": 1280, "height": 720,
+        })
+
+    async def test_audio_or_unknown_dimensions_do_not_seed_video_cache(self):
+        for selection in (
+            runner_module.MediaSelection((0,), 7200),
+            runner_module.MediaSelection((0, 1), 7200, height=720),
+            runner_module.MediaSelection((0, 1), float("inf"), height=720, width=1280),
+        ):
+            self.selection = selection
+            self.listener.ffmpeg_video_metadata = {"path": "stale"}
+            with self.subTest(selection=selection):
+                await self.adapter.add_ffmpeg_download(self.listener, self.directory.name)
+                self.assertIsNone(self.listener.ffmpeg_video_metadata)
 
     async def test_queued_task_waits_then_starts_without_duplicate_start_callback(self):
         self.queued = True
@@ -410,6 +484,7 @@ class LocalFFmpegIntegrationTests(unittest.IsolatedAsyncioTestCase):
                     f"http://127.0.0.1:{server.server_port}/fixture.mpd", output
                 )
                 self.assertEqual(selection.height, 90)
+                self.assertEqual(selection.width, 160)
                 self.assertEqual(len(selection.stream_indices), 2)
                 self.assertGreater(output.stat().st_size, 0)
                 self.assertEqual(runner.progress_raw, 100)

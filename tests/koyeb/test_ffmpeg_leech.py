@@ -172,6 +172,13 @@ class FFmpegLeechLifecycleTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(marker, output)
             self.assertNotIn(url, output)
 
+    async def test_low_memory_flag_only_skips_generated_thumbnail_when_enabled(self):
+        for value, expected in (("true", True), (" YES ", True), ("false", False), ("", False)):
+            with self.subTest(value=value), patch.dict("os.environ", {"MLTB_LOW_MEMORY": value}):
+                task = self.command.FFmpegLeech(SimpleNamespace(), self.message)
+                self.assertEqual(task.skip_generated_thumbnail, expected)
+                self.assertEqual(task.thumb, "")
+
 
 if __name__ == "__main__":
     unittest.main()

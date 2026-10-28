@@ -65,6 +65,8 @@ stale readiness marker on every start. The existing `/` page is informational.
 reduces aria2 and qBittorrent concurrency, cache sizes, threads, and peer counts.
 It also lowers SABnzbd's cache. The profile is applied after MongoDB settings are
 restored, so saved engine preferences do not undo these startup limits.
+Telegram clients use two update workers, one simultaneous transfer, and smaller
+message/topic caches in this mode.
 
 This is a conservative starting profile, not a guaranteed RAM ceiling. The bot
 still starts aria2, qBittorrent, and SABnzbd; large transfers, extraction, media
@@ -110,6 +112,11 @@ quality ceiling is **720p**, chosen for the small Koyeb instance. `-q best`
 selects the highest available representation; it can produce a much larger file.
 `-n` accepts a plain `.mp4` or `.mkv` filename. MP4 is the default; try MKV when
 the source's codecs cannot be copied into MP4.
+
+In low-memory mode, `/ffl` reuses the selected video's dimensions and duration
+when uploading its unchanged output file, and skips automatic thumbnail
+generation. A saved user thumbnail is still used. Other uploads and processed
+or split files retain their existing media inspection.
 
 The command does not accept arbitrary FFmpeg flags, local paths, or embedded
 login credentials. URLs and FFmpeg diagnostics are kept out of its logs and
