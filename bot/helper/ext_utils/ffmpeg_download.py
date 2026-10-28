@@ -184,12 +184,12 @@ class FFmpegDownloadRunner:
             return max(0.0, self.duration - self.processed_time) / rate
         return 0
 
-    async def _spawn(self, *args):
+    async def _spawn(self, *args, stdin=DEVNULL):
         if self.cancelled:
             raise FFmpegDownloadCancelled("Download cancelled by user.")
         try:
             process = await asyncio.create_subprocess_exec(
-                *args, stdin=DEVNULL, stdout=PIPE, stderr=PIPE
+                *args, stdin=stdin, stdout=PIPE, stderr=PIPE
             )
         except FileNotFoundError:
             raise FFmpegDownloadError(f"{args[0]} is not installed in this deployment.") from None

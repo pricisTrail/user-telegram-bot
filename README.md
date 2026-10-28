@@ -101,6 +101,12 @@ or direct media files. The bot selects an existing video track and audio, copies
 them into one file without transcoding, and uses its normal Telegram upload
 pipeline. The download queue, `/status`, and `/cancel` also apply.
 
+Compatible DASH sources use **two concurrent fragment requests** within one
+track at a time. Video and audio tracks are downloaded in sequence, then FFmpeg
+copies them into the requested container. HLS, direct files, and unsupported
+DASH layouts keep the existing FFmpeg download path. No speed gain is guaranteed
+for a particular CDN or server.
+
 ```text
 /ffl https://media.example.org/manifest.mpd
 /ffl https://media.example.org/manifest.mpd -q 1080 -n "My video.mp4"
@@ -117,6 +123,11 @@ In low-memory mode, `/ffl` reuses the selected video's dimensions and duration
 when uploading its unchanged output file, and skips automatic thumbnail
 generation. A saved user thumbnail is still used. Other uploads and processed
 or split files retain their existing media inspection.
+
+Parallel DASH downloads temporarily need space for both the source tracks and
+the merged output, roughly twice the final file size. The bot checks available
+space before starting fragments and continues checking throughout the merge.
+The existing 256 MiB reserve, one-hour deadline, and cancellation cleanup apply.
 
 The command does not accept arbitrary FFmpeg flags, local paths, or embedded
 login credentials. URLs and FFmpeg diagnostics are kept out of its logs and

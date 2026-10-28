@@ -179,6 +179,16 @@ class FFmpegLeechLifecycleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(task.skip_generated_thumbnail, expected)
                 self.assertEqual(task.thumb, "")
 
+    async def test_explicit_1080_quality_reaches_download_with_real_upload_setup(self):
+        self.message.text = '/ffl https://example.org/manifest.mpd -q 1080 -n video.mp4'
+        task = self.command.FFmpegLeech(SimpleNamespace(), self.message)
+
+        await task.new_event()
+
+        self.add_download.assert_awaited_once_with(task, task.dir, 1080)
+        self.send_message.assert_not_awaited()
+        self.assertEqual(task.name, 'video.mp4')
+
 
 if __name__ == "__main__":
     unittest.main()

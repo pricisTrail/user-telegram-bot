@@ -7,10 +7,10 @@ from secrets import token_urlsafe
 
 from .... import task_dict, task_dict_lock
 from ...ext_utils.ffmpeg_download import (
-    FFmpegDownloadRunner,
     FFmpegDownloadError,
     FFmpegDownloadCancelled,
 )
+from ...ext_utils.ffmpeg_parallel import ParallelFFmpegDownloadRunner as FFmpegDownloadRunner
 from ...ext_utils.task_manager import check_running_tasks
 from ..status_utils.ffmpeg_download_status import FFmpegDownloadStatus
 from ..status_utils.queue_status import QueueStatus

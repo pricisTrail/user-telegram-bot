@@ -370,6 +370,9 @@ class QueueIntegrationTests(unittest.IsolatedAsyncioTestCase):
         modules["bot"].task_dict = self.tasks
         modules["bot"].task_dict_lock = asyncio.Lock()
         modules["bot.helper.ext_utils.ffmpeg_download"] = runner_module
+        parallel_module = ModuleType("bot.helper.ext_utils.ffmpeg_parallel")
+        parallel_module.ParallelFFmpegDownloadRunner = runner_module.FFmpegDownloadRunner
+        modules[parallel_module.__name__] = parallel_module
         manager = ModuleType("bot.helper.ext_utils.task_manager")
         manager.check_running_tasks = self._queue
         modules[manager.__name__] = manager
