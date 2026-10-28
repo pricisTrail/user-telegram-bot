@@ -1,3 +1,6 @@
+from pathlib import Path
+from traceback import extract_tb
+
 from .. import LOGGER, bot_loop
 from ..helper.ext_utils.ffmpeg_request import parse_ffmpeg_request
 from ..helper.listeners.task_listener import TaskListener
@@ -26,6 +29,8 @@ class FFmpegLeech(TaskListener):
         super().__init__()
         self.same_dir = {}
         self.is_leech = True
+        # before_start expects the same empty string supplied by Mirror's parser.
+        self.thumb = ""
         self._download_error_reported = False
 
     async def on_download_error(self, error, button=None):
@@ -47,14 +52,26 @@ class FFmpegLeech(TaskListener):
         self.link = request.url
         self.name = request.name or f"ffmpeg_{self.mid}.mp4"
         await self.get_tag([])
+        stage = "upload setup"
         try:
             await self.before_start()
+            stage = "download or upload"
             await add_ffmpeg_download(self, self.dir, request.max_height)
         except Exception as exc:
-            LOGGER.warning("FFmpeg leech job failed (%s)", type(exc).__name__)
-            await self.on_download_error(
-                f"Unable to finish the FFmpeg job. Check upload settings with /{BotCommands.UserSetCommand[0]} and retry."
+            frame = extract_tb(exc.__traceback__)[-1]
+            # Frame locations help diagnose integration failures without logging
+            # exception messages, source lines, locals, or signed media URLs.
+            LOGGER.warning(
+                "FFmpeg leech job failed (%s; stage=%s; location=%s:%s)",
+                type(exc).__name__, stage, Path(frame.filename).name, frame.lineno,
             )
+            if stage == "upload setup" and isinstance(exc, ValueError):
+                error = (
+                    f"Unable to prepare the upload destination. Check /{BotCommands.UserSetCommand[0]} and retry."
+                )
+            else:
+                error = "The bot encountered an internal FFmpeg job error. Please retry later."
+            await self.on_download_error(error)
 
 
 async def ffmpeg_leech(client, message):
