@@ -7,6 +7,7 @@ MENU_ENTRIES = (
     ("start", "Start Trail Mirror Leech"),
     ("help", "Show commands and usage"),
     ("leech", "Download links or files to Telegram"),
+    ("ffl", "Leech DASH, HLS or media using FFmpeg"),
     ("qbleech", "Download torrents to Telegram"),
     ("ytdlleech", "Download videos to Telegram"),
     ("gallerydlleech", "Download galleries to Telegram"),

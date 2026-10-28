@@ -490,6 +490,7 @@ NOTE: Try each command without any argument to see more detalis.
 /{BotCommands.YtdlCommand[0]} or /{BotCommands.YtdlCommand[1]}: Mirror yt-dlp supported link.
 /{BotCommands.GallerydlCommand[0]} or /{BotCommands.GallerydlCommand[1]}: Mirror gallery-dl supported link.
 /{BotCommands.LeechCommand[0]} or /{BotCommands.LeechCommand[1]}: Start leeching to Telegram.
+/{BotCommands.FfmpegLeechCommand} URL [-q 720|best] [-n "video.mp4"]: Copy media tracks with FFmpeg and leech to Telegram. Defaults to 720p; also works by reply to a media URL.
 /{BotCommands.QbLeechCommand[0]} or /{BotCommands.QbLeechCommand[1]}: Start leeching using qBittorrent.
 /{BotCommands.JdLeechCommand[0]} or /{BotCommands.JdLeechCommand[1]}: Start leeching using JDownloader.
 /{BotCommands.NzbLeechCommand[0]} or /{BotCommands.NzbLeechCommand[1]}: Start leeching using Sabnzbd.

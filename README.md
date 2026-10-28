@@ -92,6 +92,33 @@ explicitly if you want more concurrency.
 - Keep `RCLONE_SERVE_PORT` different from the main web port if enabling rclone's
   HTTP server; its upstream default is also `8080`.
 
+### FFmpeg leech command
+
+Use `/ffl` for finite HTTP(S) DASH manifests (`.mpd`), HLS playlists (`.m3u8`),
+or direct media files. The bot selects an existing video track and audio, copies
+them into one file without transcoding, and uses its normal Telegram upload
+pipeline. The download queue, `/status`, and `/cancel` also apply.
+
+```text
+/ffl https://media.example.org/manifest.mpd
+/ffl https://media.example.org/manifest.mpd -q 1080 -n "My video.mp4"
+/ffl https://media.example.org/playlist.m3u8 -q best -n "My video.mkv"
+```
+
+You can also reply to a message containing a media URL with `/ffl`. The default
+quality ceiling is **720p**, chosen for the small Koyeb instance. `-q best`
+selects the highest available representation; it can produce a much larger file.
+`-n` accepts a plain `.mp4` or `.mkv` filename. MP4 is the default; try MKV when
+the source's codecs cannot be copied into MP4.
+
+The command does not accept arbitrary FFmpeg flags, local paths, or embedded
+login credentials. URLs and FFmpeg diagnostics are kept out of its logs and
+error messages. FFprobe inspection is bounded, a job stops after one hour, and
+disk checks retain a **256 MiB reserve**. Failed downloads and detected size or
+duration shortfalls are removed instead of being uploaded as successful results. Live
+streams and media that require decryption or additional access configuration
+are not supported by this command. No new environment variables are required.
+
 ### Free-instance limits
 
 Koyeb currently documents **512 MB RAM, 0.1 vCPU, and 2 GB SSD**, one Free instance

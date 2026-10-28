@@ -10,6 +10,13 @@ from .telegram_manager import TgClient
 def add_handlers():
     TgClient.bot.add_handler(
         MessageHandler(
+            ffmpeg_leech,
+            filters=command(BotCommands.FfmpegLeechCommand, case_sensitive=True)
+            & CustomFilters.authorized,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
             authorize,
             filters=command(BotCommands.AuthorizeCommand, case_sensitive=True)
             & CustomFilters.sudo,

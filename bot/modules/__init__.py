@@ -9,6 +9,7 @@ from .gd_count import count_node
 from .gd_delete import delete_file
 from .gd_search import gdrive_search, select_type
 from .help import arg_usage, bot_help
+from .ffmpeg_leech import ffmpeg_leech
 from .mirror_leech import (
     mirror,
     leech,
@@ -62,6 +63,7 @@ __all__ = [
     "arg_usage",
     "mirror",
     "leech",
+    "ffmpeg_leech",
     "qb_leech",
     "qb_mirror",
     "jd_leech",
