@@ -14,7 +14,7 @@ Config.load()
 
 
 async def main():
-    from asyncio import gather
+    from asyncio import gather, wait_for
     from .core.startup import (
         load_settings,
         load_configurations,
@@ -64,6 +64,18 @@ async def main():
         telegraph.create_account(),
         rclone_serve_booter(),
     )
+
+    from .core.command_menu import install_command_menu
+
+    try:
+        await wait_for(
+            install_command_menu(TgClient.bot, Config.OWNER_ID, Config.CMD_SUFFIX),
+            timeout=30,
+        )
+        LOGGER.info("Telegram command menu published and verified")
+    except Exception as exc:
+        # Menu preferences must not prevent transfers or expose private peer IDs.
+        LOGGER.warning("Telegram command menu refresh failed (%s)", type(exc).__name__)
 
 
 bot_loop.run_until_complete(main())

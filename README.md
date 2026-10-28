@@ -114,6 +114,13 @@ upstream Git updater before startup. Leave `UPSTREAM_REPO` empty and update by
 deploying a reviewed Git commit. A source or requirements change needs a rebuild;
 an environment-only change can use Koyeb's **Deploy without rebuild** option.
 
+The bot publishes its mirror/leech command menu at startup, including the
+default, private-chat, and owner-chat menus in the default language and English.
+This replaces command lists left by an earlier bot application using the same
+Telegram identity. Cloud mirror entries explicitly require Drive or rclone
+setup. Menu publication is checked against Telegram, respects `CMD_SUFFIX`, and
+cannot prevent the bot from starting if Telegram rejects a menu update.
+
 Focused deployment checks run without Telegram credentials or Linux services:
 
 ```sh
